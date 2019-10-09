@@ -29,7 +29,7 @@ elif 0 == pid:
     
     sleep(TCP_SERVER_RUNNING_DURATION)
     
-#     pthread_kill(pTcpServerListenThread->native_handle(), SIGTERM);
+    tcpServerListenThread.shutdown()
     tcpServerListenThread.join()
     del tcpServerListenThread
     

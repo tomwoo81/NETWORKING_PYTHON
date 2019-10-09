@@ -2,7 +2,7 @@
 #coding = utf-8
 
 from socket import *
-from threading import Thread
+from threading import Thread, Lock, Condition
 from src.Constants import *
 from src.Statuses import *
 from src.IpAddr import *
@@ -20,61 +20,88 @@ class TcpServerListenThread(Thread):
         self.__ipVer = ipVer
         self.__strLocalIpAddr = strLocalIpAddr
         self.__localPortNumber = localPortNumber
-        self.__threadPool = ThreadPool(THREAD_POOL_NUM_THREADS)
+        self.__shutdown = False
+        self.__lock = Lock()
+        self.__condition = Condition(self.__lock)
     def __del__(self):
-        if self.__threadPool:
-            del self.__threadPool
-            self.__threadPool = None
+        pass
 
+    def shutdown(self):
+        with self.__lock:
+            if not self.__shutdown:
+                self.__shutdown = True
+                self.__condition.notify()
+    def isShutdown(self):
+        with self.__lock:
+            return self.__shutdown
     def run(self):
         print("[Info]", "TcpServerListenThread - enter")
         
+        threadPool = ThreadPool(THREAD_POOL_NUM_THREADS)
+        
         # Open a TCP Server Socket for listening.
-        self.__listenTcpServerSockFd = socket(AF_INET if IP_ADDR_VER_4 == self.__ipVer else AF_INET6, \
-                                              SOCK_STREAM) # blocking I/O
-        if STATUS_ERR == self.__listenTcpServerSockFd:
+        listenTcpServerSockFd = socket(AF_INET if IP_ADDR_VER_4 == self.__ipVer else AF_INET6, \
+                                              SOCK_STREAM)
+        if STATUS_ERR == listenTcpServerSockFd:
 #             ErrLog(<<"Fail to open a TCP Server Socket for listening!");
             print("[Err]", "Fail to open a TCP Server Socket for listening!")
             return STATUS_ERR
         
+        # Non-blocking I/O
+        listenTcpServerSockFd.setblocking(False)
+        
         # Configure a TCP Server Socket for listening with addr and port.
-        ret = self.__listenTcpServerSockFd.bind((self.__strLocalIpAddr, self.__localPortNumber))
+        ret = listenTcpServerSockFd.bind((self.__strLocalIpAddr, self.__localPortNumber))
         if STATUS_ERR == ret:
 #             ErrLog(<<"Fail to configure a TCP Server Socket for listening with addr and port!");
             print("[Err]", "Fail to configure a TCP Server Socket for listening with addr and port!")
             return STATUS_ERR
         
         # Transfer to Listen state on TCP server.
-        ret = self.__listenTcpServerSockFd.listen(TCP_CONNECTIONS_MAX_NUM)
+        ret = listenTcpServerSockFd.listen(TCP_CONNECTIONS_MAX_NUM)
         if STATUS_ERR == ret:
 #             ErrLog(<<"Fail to transfer to Listen state on TCP server!");
             print("[Err]", "Fail to transfer to Listen state on TCP server!")
             return STATUS_ERR
         
-        while True:
-            # Accept TCP client.
-            connTcpServerSockFd, addr = self.__listenTcpServerSockFd.accept()
-            if STATUS_ERR == connTcpServerSockFd:
-                # No new TCP connection.
-                continue
-            else:
-                # A new TCP connection.
-                
-                # Create a TCP Server Connection Task.
-                task = TcpServerConnTask(connTcpServerSockFd)
-                
-                # Add a TCP Server Connection Task to the Thread Pool.
-                self.__threadPool.addTask(task)
-#                 InfoLog(<<"Add a TCP Server Connection Task to the Thread Pool.");
-                print("[Info]", "Add a TCP Server Connection Task to the Thread Pool.")
+        while not self.__waitForShutdown(10): # Wait for 10 ms.
+            while True:
+                try:
+                    # Accept TCP client.
+                    connTcpServerSockFd, addr = listenTcpServerSockFd.accept()
+                except BlockingIOError:
+                    # No new TCP connection.
+                    break
+                else:
+                    # A new TCP connection.
+                    # Create a TCP Server Connection Task.
+                    task = TcpServerConnTask(connTcpServerSockFd)
+                    
+                    # Add a TCP Server Connection Task to the Thread Pool.
+                    threadPool.addTask(task)
+#                     InfoLog(<<"Add a TCP Server Connection Task to the Thread Pool.");
+                    print("[Info]", "Add a TCP Server Connection Task to the Thread Pool.")
+                    
+                    # Remove the binding between the variable task and the object of TcpServerConnTask.
+                    del task
         
         # Close the TCP Server Socket for listening.
-        self.__listenTcpServerSockFd.close()
+        listenTcpServerSockFd.close()
 #         InfoLog(<<"Close the TCP Server Socket for listening.");
         print("[Info]", "Close the TCP Server Socket for listening.")
+        
+        # Shutdown all threads in the Thread Pool.
+        threadPool.shutdownAll()
+        threadPool.joinAll()
         
         print("[Info]", "TcpServerListenThread - exit")
         
         return STATUS_OK
+
+    def __waitForShutdown(self, ms):
+        with self.__lock:
+            if not self.__shutdown:
+                self.__condition.wait(ms / 1000)
+            return self.__shutdown
 
 # end of file

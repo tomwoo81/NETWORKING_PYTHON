@@ -16,14 +16,15 @@ class PoolTaskIf(ABC):
     def __del__(self):
         pass
 
+    def getThreadPool(self):
+        return self.__threadPool
     def setThreadPool(self, threadPool):
         self.__threadPool = threadPool
     @abstractmethod
     def run(self):
         pass
-
     @staticmethod
-    def __mSleep(ms):
+    def mSleep(ms):
         sleep(ms / 1000)
 
 '''
@@ -34,11 +35,9 @@ class PoolThread(Thread):
         super().__init__(target = self.run)
         self.__threadPool = threadPool
         self.__task = None
-#         self.condition = Condition(self.__threadPool.lock)
     def __del__(self):
         if self.__task:
             del self.__task
-            self.__task = None
 
     def run(self):
         print("[Info]", "PoolThread - enter")
@@ -46,19 +45,22 @@ class PoolThread(Thread):
         tid = currentThread().ident
         
         while True:
-            self.__task = self.__threadPool.getTask(self)
-            if self.__task:
-#                 InfoLog(<<"Thread "<<tid<<" will be busy.");
-                print("[Info]", "Thread {:#x} will be busy.".format(tid))
-                self.__task.run()
-                del self.__task #Delete a task.
-                self.__task = None
-#                 InfoLog(<<"Thread "<<tid<<" will be idle.");
-                print("[Info]", "Thread {:#x} will be idle.".format(tid))
+            status, self.__task = self.__threadPool.getTask()
+            if status:
+                if self.__task:
+#                     InfoLog(<<"Thread "<<tid<<" will be busy.");
+                    print("[Info]", "Thread {:#x} will be busy.".format(tid))
+                    self.__task.run()
+                    del self.__task #Delete a task.
+#                     InfoLog(<<"Thread "<<tid<<" will be idle.");
+                    print("[Info]", "Thread {:#x} will be idle.".format(tid))
             else:
 #                 InfoLog(<<"Thread "<<tid<<" will exit.");
                 print("[Info]", "Thread {:#x} will exit.".format(tid))
                 break
+        
+        # Remove the binding between the variable self.__threadPool and the object of ThreadPool.
+        self.__threadPool = None
         
         print("[Info]", "PoolThread - exit")
         
@@ -71,6 +73,7 @@ class ThreadPool:
     def __init__(self, numThreads):
         self.__lThread = list()
         self.__lTask = list()
+        self.__shutdown = False
         self.__lock = Lock()
         self.__condition = Condition(self.__lock)
         
@@ -81,16 +84,20 @@ class ThreadPool:
         print("[Info]", "{:d} threads are created in this Thread Pool.".format(numThreads))
     def __del__(self):
         self.shutdownAll()
+        self.joinAll()
 
     def addTask(self, task):
         with self.__lock:
             task.setThreadPool(self)
             self.__lTask.append(task)
             self.__condition.notify()
-    def getTask(self, thread):
+    def getTask(self):
         with self.__lock:
-            while 0 == len(self.__lTask):
+            while (0 == len(self.__lTask)) and (not self.__shutdown):
                 self.__condition.wait()
+            
+            if self.__shutdown:
+                return (False, None)
             
             it = iter(self.__lTask)
             try:
@@ -99,21 +106,27 @@ class ThreadPool:
             except StopIteration:
                 task = None
             
-            return task
+            return (True, task)
     def shutdownAll(self):
         with self.__lock:
-            for o in self.__lThread:
-#                 pthread_kill(p->native_handle(), SIGTERM);
-                o.join()
-                del o
-            self.__lThread.clear()
-            
-            for o in self.__lTask:
-                del o
-            self.__lTask.clear()
+            if not self.__shutdown:
+#                 InfoLog(<<"To shutdown all threads in this Thread Pool.");
+                print("[Info]", "To shutdown all threads in this Thread Pool.")
+                
+                self.__shutdown = True
+                self.__condition.notify_all()
+    def joinAll(self):
+        for o in self.__lThread:
+            o.join()
+            del o
+        
+        self.__lThread.clear()
     def getPendingTaskNum(self):
         with self.__lock:
             return len(self.__lTask)
+    def isShutdown(self):
+        with self.__lock:
+            return self.__shutdown
 
     def __createAll(self, numThreads):
         for i in range(numThreads):
