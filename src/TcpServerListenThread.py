@@ -26,14 +26,6 @@ class TcpServerListenThread(Thread):
     def __del__(self):
         pass
 
-    def shutdown(self):
-        with self.__lock:
-            if not self.__shutdown:
-                self.__shutdown = True
-                self.__condition.notify()
-    def isShutdown(self):
-        with self.__lock:
-            return self.__shutdown
     def run(self):
         print("[Info]", "TcpServerListenThread - enter")
         
@@ -97,6 +89,14 @@ class TcpServerListenThread(Thread):
         print("[Info]", "TcpServerListenThread - exit")
         
         return STATUS_OK
+    def shutdown(self):
+        with self.__lock:
+            if not self.__shutdown:
+                self.__shutdown = True
+                self.__condition.notify()
+    def isShutdown(self):
+        with self.__lock:
+            return self.__shutdown
 
     def __waitForShutdown(self, ms):
         with self.__lock:

@@ -49,14 +49,14 @@ class PoolThread(Thread):
             if status:
                 if self.__task:
 #                     InfoLog(<<"Thread "<<tid<<" will be busy.");
-                    print("[Info]", "Thread {:#x} will be busy.".format(tid))
+                    print("[Info]", "Thread {:#X} will be busy.".format(tid))
                     self.__task.run()
-                    del self.__task #Delete a task.
+                    del self.__task # Delete a task.
 #                     InfoLog(<<"Thread "<<tid<<" will be idle.");
-                    print("[Info]", "Thread {:#x} will be idle.".format(tid))
+                    print("[Info]", "Thread {:#X} will be idle.".format(tid))
             else:
 #                 InfoLog(<<"Thread "<<tid<<" will exit.");
-                print("[Info]", "Thread {:#x} will exit.".format(tid))
+                print("[Info]", "Thread {:#X} will exit.".format(tid))
                 break
         
         # Remove the binding between the variable self.__threadPool and the object of ThreadPool.
@@ -107,6 +107,9 @@ class ThreadPool:
                 task = None
             
             return (True, task)
+    def isShutdown(self):
+        with self.__lock:
+            return self.__shutdown
     def shutdownAll(self):
         with self.__lock:
             if not self.__shutdown:
@@ -124,9 +127,6 @@ class ThreadPool:
     def getPendingTaskNum(self):
         with self.__lock:
             return len(self.__lTask)
-    def isShutdown(self):
-        with self.__lock:
-            return self.__shutdown
 
     def __createAll(self, numThreads):
         for i in range(numThreads):
