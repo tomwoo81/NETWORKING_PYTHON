@@ -142,13 +142,15 @@ def main(argv):
     
     if argc >= 2:
         socketType = argv[1]
+    else:
+        socketType = "tcp"
     
     if "tcp" == socketType.lower():
-        return tcpMain()
+        tcpMain()
     elif "udp" == socketType.lower():
-        return udpMain()
+        udpMain()
     else:
-        print("[Info]", "The type ({}) is invalid!".format(socketType))
+        print("[Err]", "The type ({}) is invalid!".format(socketType))
         return STATUS_ERR
     
     return STATUS_OK
