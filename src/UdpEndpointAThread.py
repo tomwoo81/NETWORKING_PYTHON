@@ -35,7 +35,7 @@ class UdpEndpointAThread(Thread):
             print("[Err]", "Fail to open a UDP Endpoint Socket!")
             return STATUS_ERR
         
-        # Make address reusable
+        # Make address reusable.
         sockFd.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         
         # Configure a UDP Endpoint Socket with addr and port.
