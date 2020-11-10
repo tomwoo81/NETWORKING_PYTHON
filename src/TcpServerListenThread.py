@@ -42,6 +42,9 @@ class TcpServerListenThread(Thread):
         # Non-blocking I/O
         listenTcpServerSockFd.setblocking(False)
         
+        # Make address reusable
+        listenTcpServerSockFd.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        
         # Configure a TCP Server Socket for listening with addr and port.
         ret = listenTcpServerSockFd.bind((self.__strLocalIpAddr, self.__localPortNumber))
         if STATUS_ERR == ret:

@@ -36,6 +36,9 @@ class TcpClientThread(Thread):
             print("[Err]", "Fail to open a TCP Client Socket!")
             return STATUS_ERR
         
+        # Make address reusable
+        sockFd.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        
         # Configure a TCP Client Socket with addr and port.
         ret = sockFd.bind((self.__strLocalIpAddr, self.__localPortNumber))
         if STATUS_ERR == ret:
